@@ -9,13 +9,14 @@ import NIOCore
 
 extension RTP {
     public struct Inbound: AsyncSequence {
-        public typealias AsyncIterator = NIOAsyncChannelInboundStream<RTPPacket>.AsyncIterator
+        public typealias AsyncIterator = AsyncMapSequence<NIOAsyncChannelInboundStream<AddressedEnvelope<RTPPacket>>, RTPPacket>.AsyncIterator
         public typealias Element = RTPPacket
 
-        let asyncChannelInboundStream: NIOAsyncChannelInboundStream<RTPPacket>
+        let asyncChannelInboundStream: NIOAsyncChannelInboundStream<AddressedEnvelope<RTPPacket>>
 
         public func makeAsyncIterator() -> AsyncIterator {
             asyncChannelInboundStream
+                .map(\.data)
                 .makeAsyncIterator()
         }
     }

@@ -43,16 +43,17 @@ public struct RTP {
         port: Int,
         _ body: (_ inbound: Inbound, _ outbound: Outbound) async throws -> Result
     ) async throws -> Result {
-        let channel = try await bootstrap.connect(host: host, port: port).get()
+        let socketAddress = try SocketAddress.makeAddressResolvingHost(host, port: port)
+        let channel = try await bootstrap.connect(to: socketAddress).get()
 
         let asyncChannel = try await channel.eventLoop.makeCompletedFuture {
-            try NIOAsyncChannel<RTPPacket, RTPPacket>(wrappingChannelSynchronously: channel)
+            try NIOAsyncChannel<AddressedEnvelope<RTPPacket>, AddressedEnvelope<RTPPacket>>(wrappingChannelSynchronously: channel)
         }.get()
 
         return try await asyncChannel.executeThenClose { inbound, outbound in
             return try await body(
                 Inbound(asyncChannelInboundStream: inbound),
-                Outbound(asyncChannelOutboundWriter: outbound)
+                Outbound(asyncChannelOutboundWriter: outbound, socketAddress: socketAddress)
             )
         }
     }

@@ -10,8 +10,8 @@ import NIOCore
 extension RTP {
     class ChannelHandler: ChannelDuplexHandler {
         typealias InboundIn = AddressedEnvelope<ByteBuffer>
-        typealias InboundOut = RTPPacket
-        typealias OutboundIn = RTPPacket
+        typealias InboundOut = AddressedEnvelope<RTPPacket>
+        typealias OutboundIn = AddressedEnvelope<RTPPacket>
         typealias OutboundOut = AddressedEnvelope<ByteBuffer>
 
         func channelRead(context: ChannelHandlerContext, data _data: NIOAny) {
@@ -20,7 +20,11 @@ extension RTP {
             do {
                 let packet = try RTPPacket(data.data.readableBytesView)
 
-                context.fireChannelRead(wrapInboundOut(packet))
+                context.fireChannelRead(wrapInboundOut(.init(
+                    remoteAddress: data.remoteAddress,
+                    data: packet,
+                    metadata: data.metadata.flatMap { .init(ecnState: $0.ecnState, packetInfo: $0.packetInfo) }
+                )))
             } catch {
                 context.fireErrorCaught(error)
             }
@@ -30,15 +34,12 @@ extension RTP {
             let data = unwrapOutboundIn(data)
 
             do {
-                guard let remoteAddress = context.remoteAddress else {
-                    throw RTP.Error.unknown
-                }
-
                 context.writeAndFlush(
                     wrapOutboundOut(
-                        AddressedEnvelope(
-                            remoteAddress: remoteAddress,
-                            data: try context.channel.allocator.buffer(bytes: data.data)
+                        .init(
+                            remoteAddress: data.remoteAddress,
+                            data: try context.channel.allocator.buffer(bytes: data.data.data),
+                            metadata: data.metadata.flatMap { .init(ecnState: $0.ecnState, packetInfo: $0.packetInfo) }
                         )
                     ),
                     promise: promise
